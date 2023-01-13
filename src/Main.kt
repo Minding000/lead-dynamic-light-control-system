@@ -1,412 +1,403 @@
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.net.*;
-import java.util.*;
+import java.io.*
+import java.net.*
+import java.util.*
 
-public class Main {
-	private final static String SERVER_PROPERTIES_FILE_NAME = "serverState";
-	private final static String SERVER_PROPERTIES_TIMEZONE = "timezone";
-	private final static String SERVER_PROPERTIES_IP = "ip";
-	private final static String SERVER_PROPERTIES_PORT = "port";
-	private final static String SERVER_DEFAULT_TIMEZONE = "Europe/Berlin";
-	private final static String SERVER_DEFAULT_IP = "127.0.0.1";
-	private final static String SERVER_DEFAULT_PORT = "59378";
-	public final static boolean WARNING = true;
-	private final static boolean RUNNING = true;
-	private final static boolean SHUTDOWN = false;
-	private final static int FAILED_WRITE_CYCLE_THRESHOLD = 3;
-	
+object Main {
+	private const val SERVER_PROPERTIES_FILE_NAME = "serverState"
+	private const val SERVER_PROPERTIES_TIMEZONE = "timezone"
+	private const val SERVER_PROPERTIES_IP = "ip"
+	private const val SERVER_PROPERTIES_PORT = "port"
+	private const val SERVER_DEFAULT_TIMEZONE = "Europe/Berlin"
+	private const val SERVER_DEFAULT_IP = "127.0.0.1"
+	private const val SERVER_DEFAULT_PORT = "59378"
+	const val WARNING = true
+	private const val FAILED_WRITE_CYCLE_THRESHOLD = 3
+
 	//private final static String IP = "10.10.100.255";	//ipconfig => wifi ipv4
-	private final static int LOCAL_INIT_PORT = 48899;	//constant/Constant.UDP_SEND_PORT
-	private final static int LOCAL_DATA_PORT = 8899;	//constant/Constant.UDP_DATA_SEND_PORT
-	private final static int TCP_SOCKET_TIMEOUT = 3000;	//view/CircleView.ROTATE_VISIBLE_DELAY
-	private final static int HEARTBEAT_BUFFER = 1;
-	private final static int HEARTBEAT_DELAY = 30;
-	private final static int UDP_BUFFER_LENGTH = 100;
-	private final static int UDP_SOCKET_TIMEOUT = 1000;	//constant/Constant.UDP_HF_SOTIMEOUT
-	private final static byte[] UDP_GET_MAC_CMD = "HF-A11ASSISTHREAD".getBytes();
-	public final static byte[] DATA_OUTPUT = new byte[]{85, 0, 0, 0, 1, 0, 0, 0, 0, 0, -86, -86};
+	private const val LOCAL_INIT_PORT = 48899 //constant/Constant.UDP_SEND_PORT
+	private const val LOCAL_DATA_PORT = 8899 //constant/Constant.UDP_DATA_SEND_PORT
+	private const val TCP_SOCKET_TIMEOUT = 3000 //view/CircleView.ROTATE_VISIBLE_DELAY
+	private const val HEARTBEAT_BUFFER = 1
+	private const val HEARTBEAT_DELAY = 30
+	private const val UDP_BUFFER_LENGTH = 100
+	private const val UDP_SOCKET_TIMEOUT = 1000 //constant/Constant.UDP_HF_SOTIMEOUT
+	private val UDP_GET_MAC_CMD = "HF-A11ASSISTHREAD".toByteArray()
+	val DATA_OUTPUT = byteArrayOf(85, 0, 0, 0, 1, 0, 0, 0, 0, 0, -86, -86)
+	var ip = "127.0.0.1"
+	var path: String? = null
+	var debugMode = true
+	private var isRunning = false
+	private var address: InetAddress? = null
+	private var datagramSocket: DatagramSocket? = null
+	private var heartbeat: Heartbeat? = null
+	var osm: OutputStreamManager? = null
+	private val serverState = Properties()
+	private lateinit var scan: Scanner
+	var timer: Timer? = null
+	var timezone: TimeZone? = null
+	var lights: MutableList<Light> = LinkedList()
 
-	public static String ip = "127.0.0.1";
-	public static String path;
-	public static boolean debug = true;
-	private static boolean status;
-	private static InetAddress address = null;
-	private static DatagramSocket ds = null;
-	private static Heartbeat heartbeat;
-	public static OutputStreamManager osm;
-	private static Properties serverState;
-	private static Scanner scan;
-	public static Timer timer;
-	public static TimeZone timezone;
-	public static List<Light> lights = new LinkedList();
-	
-	public static void main(String[] args) {
-		scan = new Scanner(System.in);
-		init();
-		while(status) {
-			String[] cmd = scan.nextLine().split("\\s+", -1);
-			switch(cmd[0].toLowerCase()) {
-				case "port":
-					if(cmd.length == 2) {
-						serverState.setProperty(SERVER_PROPERTIES_PORT, cmd[1]);
-						log(Actions.Tag.CONSOLE, "Restart required to apply changes.");
-					} else {
-						log(Actions.Tag.CONSOLE, "Current port: " + serverState.getProperty(SERVER_PROPERTIES_PORT, SERVER_DEFAULT_PORT));
-					}
-					break;
-				case "timezone":
-					if(cmd.length == 2) {
-						TimeZone temp = TimeZone.getTimeZone(cmd[1]);
-						if(cmd[1].equals("GMT") || !temp.getID().equals("GMT")) {
-							timezone = temp;
-							log(Actions.Tag.CONSOLE, "Timezone set: " + temp.getID());
-							log(Actions.Tag.CONSOLE, "Restart required to apply changes.");
-						} else {
-							log(Actions.Tag.CONSOLE, "Unknown timezone.");
-						}
-					} else {
-						log(Actions.Tag.CONSOLE, "Current timezone: " + timezone.getID());
-					}
-					break;
-				case "?":
-				case "help":
-					log(Actions.Tag.CONSOLE, "Available commands:");
-					log(Actions.Tag.CONSOLE, ">>port");
-					log(Actions.Tag.CONSOLE, ">>timezone");
-					log(Actions.Tag.CONSOLE, ">>shutdown");
-					log(Actions.Tag.CONSOLE, ">>help");
-					break;
-				case "shutdown":
-					terminate();
-				default:
-					log(Actions.Tag.CONSOLE, "Invalid input, type '?' for help.");
-			}
-		}
-	}
-	
-	private static void init() {
-		status = RUNNING;
-		heartbeat = new Heartbeat();
-		osm = new OutputStreamManager();
-		timer = new Timer();
-		serverState = new Properties();
-		log(Actions.Tag.INIT, "Loading server properties file...");
-		try {
-			path = new File(Main.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getParent() + File.separatorChar;
-		} catch (URISyntaxException e) {
-			terminate(Actions.Tag.INIT, "Failed to retrieve jar file location.", e);
-		}
-		try {
-			serverState.load(new FileInputStream(path + SERVER_PROPERTIES_FILE_NAME + ".properties"));
-		} catch (FileNotFoundException e_handled) {
-			try {
-				final File temp_new_file = new File(path + SERVER_PROPERTIES_FILE_NAME + ".properties");
-				temp_new_file.getParentFile().mkdir();
-				if(!temp_new_file.createNewFile())
-					throw new IOException("ALCS: File already exists.");
-				serverState.store(new FileOutputStream(temp_new_file), "ALCS: " + SERVER_PROPERTIES_FILE_NAME);
-			} catch (IOException e) {
-				terminate(Actions.Tag.INIT, "Could not not create properties file for the server state.", e);
-			}
-			log(Actions.Tag.INIT, "Created server properties file at " + path + SERVER_PROPERTIES_FILE_NAME + ".properties" + ".");
-		} catch (IOException e) {
-			terminate(Actions.Tag.INIT, "Could not load server properties file.", e);
-		}
-		ip = serverState.getProperty(SERVER_PROPERTIES_IP, SERVER_DEFAULT_IP);
-		timezone = TimeZone.getTimeZone(serverState.getProperty(SERVER_PROPERTIES_TIMEZONE, SERVER_DEFAULT_TIMEZONE));
-		log(Actions.Tag.INIT, "Timestamp updated.");
-		log(Actions.Tag.INIT, "Determining host IP address...");
-		try {
-			address = InetAddress.getByName(ip);
-		} catch (UnknownHostException e) {
-			terminate(Actions.Tag.INIT, "Unknown host: " + ip, e);
-		}
-		log(Actions.Tag.INIT, "IP Address (" + ip + "): " + address.toString());
-		heartbeat.start();
-		osm.start();
-	}
-	
-	private static String getMAC() {
-		log(Actions.Tag.UDP, "Creating DatagramSocket...");
-		try {
-			ds = new DatagramSocket(LOCAL_INIT_PORT);
-		} catch (SocketException e) {
-			terminate(Actions.Tag.UDP, "Could not create DatagramSocket.", e);
-		}
-		log(Actions.Tag.UDP, "Setting socket timeout...");
-		try {
-			ds.setSoTimeout(UDP_SOCKET_TIMEOUT);
-		} catch (SocketException e) {
-			terminate(Actions.Tag.UDP, "Could not set socket timeout.", e);
-		}
-		DatagramPacket dp = new DatagramPacket(new byte[UDP_BUFFER_LENGTH], UDP_BUFFER_LENGTH);
-		log(Actions.Tag.UDP, "Sending scan request...");
-		try {
-			ds.send(new DatagramPacket(UDP_GET_MAC_CMD, UDP_GET_MAC_CMD.length, address, LOCAL_INIT_PORT));
-		} catch (IOException e) {
-			terminate(Actions.Tag.UDP, "Could not send UDP 'getMAC' request.", e);
-		}
-		log(Actions.Tag.UDP, "Receiving data...");
-		String mac = null;
-		try {
-			while(true) {
-				ds.receive(dp);
-				String temp;
-				String[] data = (temp = new String(dp.getData(), dp.getOffset(), dp.getLength())).split(",");
-				log(Actions.Tag.UDP, ">Received '" + temp + "'.");
-				if(data.length == 3) {
-					mac = data[0];
-					lights.add(new Light(new byte[]{(byte) data[1].charAt(9), (byte) data[1].charAt(10), (byte) data[1].charAt(11)}));
-					log(Actions.Tag.UDP, ">Light '" + data[1] + "' added.");
+	@JvmStatic
+	fun main(args: Array<String>) {
+		scan = Scanner(System.`in`)
+		init()
+		while (isRunning) {
+			val cmd = scan.nextLine().split("\\s+".toRegex()).toTypedArray()
+			when (cmd[0].lowercase(Locale.getDefault())) {
+				"port" -> if (cmd.size == 2) {
+					serverState.setProperty(SERVER_PROPERTIES_PORT, cmd[1])
+					log(LogTag.CONSOLE, "Restart required to apply changes.")
+				} else {
+					log(
+						LogTag.CONSOLE,
+						"Current port: " + serverState.getProperty(SERVER_PROPERTIES_PORT, SERVER_DEFAULT_PORT)
+					)
 				}
+				"timezone" -> if (cmd.size == 2) {
+					val temp = TimeZone.getTimeZone(cmd[1])
+					if (cmd[1] == "GMT" || temp.id != "GMT") {
+						timezone = temp
+						log(LogTag.CONSOLE, "Timezone set: " + temp.id)
+						log(LogTag.CONSOLE, "Restart required to apply changes.")
+					} else {
+						log(LogTag.CONSOLE, "Unknown timezone.")
+					}
+				} else {
+					log(LogTag.CONSOLE, "Current timezone: " + timezone!!.id)
+				}
+				"?", "help" -> {
+					log(LogTag.CONSOLE, "Available commands:")
+					log(LogTag.CONSOLE, ">>port")
+					log(LogTag.CONSOLE, ">>timezone")
+					log(LogTag.CONSOLE, ">>shutdown")
+					log(LogTag.CONSOLE, ">>help")
+				}
+				"shutdown" -> {
+					terminate()
+					log(LogTag.CONSOLE, "Invalid input, type '?' for help.")
+				}
+				else -> log(LogTag.CONSOLE, "Invalid input, type '?' for help.")
 			}
-		} catch (SocketTimeoutException e) {
-			log(Actions.Tag.UDP, "Socket timed out.");
-		} catch (IOException e) {
-			terminate(Actions.Tag.UDP, "Could not receive data.", e);
 		}
-		if(mac == null) terminate(Actions.Tag.UDP, "Could not determine MAC address.");
-		return mac;
 	}
-	
-	static void log(String tag, String msg) {
-		System.out.println(String.format("%1$-4s", tag) + ": " + msg);
-		System.out.flush();
+
+	private fun init() {
+		isRunning = true
+		heartbeat = Heartbeat()
+		osm = OutputStreamManager()
+		timer = Timer()
+		log(LogTag.INIT, "Loading server properties file...")
+		try {
+			path = File(Main::class.java.protectionDomain.codeSource.location.toURI()).parent + File.separatorChar
+		} catch (e: URISyntaxException) {
+			terminate(LogTag.INIT, "Failed to retrieve jar file location.", e)
+		}
+		try {
+			serverState.load(FileInputStream("$path$SERVER_PROPERTIES_FILE_NAME.properties"))
+		} catch (e_handled: FileNotFoundException) {
+			try {
+				val temp_new_file = File("$path$SERVER_PROPERTIES_FILE_NAME.properties")
+				temp_new_file.parentFile.mkdir()
+				if (!temp_new_file.createNewFile()) throw IOException("ALCS: File already exists.")
+				serverState.store(FileOutputStream(temp_new_file), "ALCS: $SERVER_PROPERTIES_FILE_NAME")
+			} catch (e: IOException) {
+				terminate(LogTag.INIT, "Could not not create properties file for the server state.", e)
+			}
+			log(
+				LogTag.INIT,
+				"Created server properties file at $path$SERVER_PROPERTIES_FILE_NAME.properties."
+			)
+		} catch (e: IOException) {
+			terminate(LogTag.INIT, "Could not load server properties file.", e)
+		}
+		ip = serverState.getProperty(SERVER_PROPERTIES_IP, SERVER_DEFAULT_IP)
+		timezone = TimeZone.getTimeZone(serverState.getProperty(SERVER_PROPERTIES_TIMEZONE, SERVER_DEFAULT_TIMEZONE))
+		log(LogTag.INIT, "Timestamp updated.")
+		log(LogTag.INIT, "Determining host IP address...")
+		try {
+			address = InetAddress.getByName(ip)
+		} catch (e: UnknownHostException) {
+			terminate(LogTag.INIT, "Unknown host: $ip", e)
+		}
+		log(LogTag.INIT, "IP Address (" + ip + "): " + address.toString())
+		heartbeat!!.start()
+		osm!!.start()
 	}
-	
-	static void log(String tag, String msg, boolean error) {
-		if(error) {
-			System.out.print(String.format("%1$-4s", tag) + ": ");
-			System.out.flush();
-			System.err.println(msg);
-			System.err.flush();
+
+	private val macAddress: String?
+		get() {
+			log(LogTag.UDP, "Creating DatagramSocket...")
+			try {
+				datagramSocket = DatagramSocket(LOCAL_INIT_PORT)
+			} catch (e: SocketException) {
+				terminate(LogTag.UDP, "Could not create DatagramSocket.", e)
+			}
+			log(LogTag.UDP, "Setting socket timeout...")
+			try {
+				datagramSocket!!.soTimeout = UDP_SOCKET_TIMEOUT
+			} catch (e: SocketException) {
+				terminate(LogTag.UDP, "Could not set socket timeout.", e)
+			}
+			val dp = DatagramPacket(ByteArray(UDP_BUFFER_LENGTH), UDP_BUFFER_LENGTH)
+			log(LogTag.UDP, "Sending scan request...")
+			try {
+				datagramSocket!!.send(DatagramPacket(UDP_GET_MAC_CMD, UDP_GET_MAC_CMD.size, address, LOCAL_INIT_PORT))
+			} catch (e: IOException) {
+				terminate(LogTag.UDP, "Could not send UDP 'getMAC' request.", e)
+			}
+			log(LogTag.UDP, "Receiving data...")
+			var mac: String? = null
+			try {
+				while (true) {
+					datagramSocket!!.receive(dp)
+					val message = String(dp.data, dp.offset, dp.length)
+					log(LogTag.UDP, ">Received '$message'.")
+					val data = message.split(",")
+					if (data.size == 3) {
+						mac = data[0]
+						lights.add(
+							Light(
+								byteArrayOf(
+									data[1][9].code.toByte(),
+									data[1][10].code.toByte(),
+									data[1][11].code.toByte()
+								)
+							)
+						)
+						log(LogTag.UDP, ">Light '" + data[1] + "' added.")
+					}
+				}
+			} catch (e: SocketTimeoutException) {
+				log(LogTag.UDP, "Socket timed out.")
+			} catch (e: IOException) {
+				terminate(LogTag.UDP, "Could not receive data.", e)
+			}
+			if (mac == null) terminate(LogTag.UDP, "Could not determine MAC address.")
+			return mac
+		}
+
+	fun log(tag: String?, msg: String) {
+		println(String.format("%1$-4s", tag) + ": " + msg)
+		System.out.flush()
+	}
+
+	fun log(tag: String?, msg: String, error: Boolean) {
+		if (error) {
+			print(String.format("%1$-4s", tag) + ": ")
+			System.out.flush()
+			System.err.println(msg)
+			System.err.flush()
 		} else {
-			log(tag, msg);
+			log(tag, msg)
 		}
 	}
-	
-	static void log(String tag, String msg, Exception e) {
-		log(tag, msg, WARNING);
-		if(debug)
-			e.printStackTrace();
-	}
-	
-	static void shutdown() {
-		status = SHUTDOWN;
-		log(Actions.Tag.SHUTDOWN, "Stopping OSM...");
-		osm.close();
-		if(osm.isAlive()) {
-			try {
-				osm.join();
-			} catch (InterruptedException e) {
-				if(debug) e.printStackTrace();
-			}
-		}
-		if(heartbeat.isAlive()) {
-			log(Actions.Tag.SHUTDOWN, "Stopping heartbeat...");
-			try {
-				heartbeat.join();
-			} catch (InterruptedException e) {
-				if(debug) e.printStackTrace();
-			}
-		}
-		timer.cancel();
-	}
-	
-	static void terminate() {
-		if(status) {
-			scan.close();
-			log(Actions.Tag.TERMINATE, "Terminating server...");
-			shutdown();
-			log(Actions.Tag.TERMINATE, "Exiting...");
-			System.exit(0);
-		}
-	}
-	
-	static void terminate(String tag, String msg) {
-		log(tag, msg, WARNING);
-		terminate();
-	}
-	
-	static void terminate(String tag, String msg, Exception e) {
-		if(debug) e.printStackTrace();
-		terminate(tag, msg);
-	}
-	
-	static class Heartbeat extends Thread {
 
-		@Override
-		public void run() {
-			log(Actions.Tag.UDP, "Initiating heartbeat...");
-			while(status) {
+	fun log(tag: String?, msg: String, e: Exception) {
+		log(tag, msg, WARNING)
+		if (debugMode) e.printStackTrace()
+	}
+
+	fun shutdown() {
+		isRunning = false
+		log(LogTag.SHUTDOWN, "Stopping OSM...")
+		osm!!.close()
+		if (osm!!.isAlive) {
+			try {
+				osm!!.join()
+			} catch (e: InterruptedException) {
+				if (debugMode) e.printStackTrace()
+			}
+		}
+		if (heartbeat!!.isAlive) {
+			log(LogTag.SHUTDOWN, "Stopping heartbeat...")
+			try {
+				heartbeat!!.join()
+			} catch (e: InterruptedException) {
+				if (debugMode) e.printStackTrace()
+			}
+		}
+		timer!!.cancel()
+	}
+
+	fun terminate() {
+		if (isRunning) {
+			scan.close()
+			log(LogTag.TERMINATE, "Terminating server...")
+			shutdown()
+			log(LogTag.TERMINATE, "Exiting...")
+			System.exit(0)
+		}
+	}
+
+	fun terminate(tag: String?, msg: String) {
+		log(tag, msg, WARNING)
+		terminate()
+	}
+
+	fun terminate(tag: String?, msg: String, e: Exception) {
+		if (debugMode) e.printStackTrace()
+		terminate(tag, msg)
+	}
+
+	internal class Heartbeat : Thread() {
+		override fun run() {
+			log(LogTag.UDP, "Initiating heartbeat...")
+			while (isRunning) {
 				try {
-					Thread.sleep(HEARTBEAT_DELAY);
-				} catch (InterruptedException e) {
-					log(Actions.Tag.UDP, "Heartbeat is out of tact.", e);
+					sleep(HEARTBEAT_DELAY.toLong())
+				} catch (e: InterruptedException) {
+					log(LogTag.UDP, "Heartbeat is out of tact.", e)
 				}
 				try {
-					ds.send(new DatagramPacket(new byte[HEARTBEAT_BUFFER], HEARTBEAT_BUFFER, address, LOCAL_DATA_PORT));
-				} catch (Exception e) {
-					log(Actions.Tag.UDP, "Could not send Heartbeat.", e);
+					datagramSocket!!.send(DatagramPacket(ByteArray(HEARTBEAT_BUFFER), HEARTBEAT_BUFFER, address, LOCAL_DATA_PORT))
+				} catch (e: Exception) {
+					log(LogTag.UDP, "Could not send Heartbeat.", e)
 				}
 			}
-			log(Actions.Tag.UDP, "Heartbeat stopped.");
-			ds.close();
-			log(Actions.Tag.UDP, "Datagram socket closed.");
+			log(LogTag.UDP, "Heartbeat stopped.")
+			datagramSocket!!.close()
+			log(LogTag.UDP, "Datagram socket closed.")
 		}
 	}
-	
-	static class OutputStreamManager extends Thread {
-		private final int RECONNECT_TIMEOUT = 1000;
-		private final int TRANSMISSION_DISCONNECT = -1;
-		
-		boolean writing = false;
-		boolean connected = false;
-		short failedWriteCycles = 0;
-		Object lock_connection = new Object();
-		InetSocketAddress localNetwork;
-		List<byte[]> buffer = new ArrayList<>();
-		Socket localSocket = null;
-		BufferedInputStream bis = null;
-		BufferedOutputStream bos = null;
-		
-		@Override
-		public synchronized void start() {
-			localNetwork = new InetSocketAddress(getMAC(), LOCAL_DATA_PORT);
-			super.start();
+
+	class OutputStreamManager: Thread() {
+		private val RECONNECT_TIMEOUT = 1000
+		private val TRANSMISSION_DISCONNECT = -1
+		var writing = false
+		var connected = false
+		var failedWriteCycles: Short = 0
+		var lock_connection = Object()
+		var localNetwork: InetSocketAddress? = null
+		var buffer: MutableList<ByteArray> = ArrayList()
+		var localSocket: Socket? = null
+		var bis: BufferedInputStream? = null
+		var bos: BufferedOutputStream? = null
+
+		@Synchronized
+		override fun start() {
+			localNetwork = InetSocketAddress(macAddress, LOCAL_DATA_PORT)
+			super.start()
 		}
 
-		@Override
-		public void run() {
-			log(Actions.Tag.OSM, "Connecting local socket to " + localNetwork.getHostString() + "...");
-			while(disconnected()) {
-				connected = false;
+		override fun run() {
+			log(LogTag.OSM, "Connecting local socket to " + localNetwork!!.hostString + "...")
+			while (disconnected()) {
+				connected = false
 				synchronized(lock_connection) {
 					try {
-						lock_connection.wait();
-					} catch (InterruptedException e) {
-						if(!status) return;
-						log(Actions.Tag.OSM, "Could not wait to reconnect, until connection is needed, reconnecting...", e);
+						lock_connection.wait()
+					} catch (e: InterruptedException) {
+						if (!isRunning) return
+						log(LogTag.OSM, "Could not wait to reconnect, until connection is needed, reconnecting...", e)
 					}
 				}
-				localSocket = new Socket();
+				localSocket = Socket()
 				try {
-					localSocket.connect(localNetwork, TCP_SOCKET_TIMEOUT);
-					bis = new BufferedInputStream(localSocket.getInputStream());
-					bos = new BufferedOutputStream(localSocket.getOutputStream());
-				} catch (IOException e_handled) {
+					localSocket!!.connect(localNetwork, TCP_SOCKET_TIMEOUT)
+					bis = BufferedInputStream(localSocket!!.getInputStream())
+					bos = BufferedOutputStream(localSocket!!.getOutputStream())
+				} catch (e_handled: IOException) {
 					try {
-						localSocket.close();
-					} catch (IOException e_ignore) {
-					}
+						localSocket!!.close()
+					} catch (_: IOException) {}
 					try {
-						sleep(RECONNECT_TIMEOUT);
-					} catch (InterruptedException e) {
-						log(Actions.Tag.OSM, "Failed to reconnect the local socket: could not sleep.", e);
-						break;
+						sleep(RECONNECT_TIMEOUT.toLong())
+					} catch (e: InterruptedException) {
+						log(LogTag.OSM, "Failed to reconnect the local socket: could not sleep.", e)
+						break
 					}
-					continue;
+					continue
 				}
-				log(Actions.Tag.OSM, "Connected.");
-				connected = true;
-				synchronized(lock_connection) {
-					lock_connection.notify();
-				}
+				log(LogTag.OSM, "Connected.")
+				connected = true
+				synchronized(lock_connection) { lock_connection.notify() }
 			}
-			terminate(Actions.Tag.OSM, "OSM stopped.");
+			terminate(LogTag.OSM, "OSM stopped.")
 		}
 
-		private boolean disconnected() {
+		private fun disconnected(): Boolean {
 			try {
-				while(true)
-					switch(bis.read()) {
-						case TRANSMISSION_DISCONNECT:
-							log(Actions.Tag.OSM, "Disconnected.");
-							return status;
-						default:
-							log(Actions.Tag.OSM, "Received invalid flag.", WARNING);
+				while (true) when (bis!!.read()) {
+					TRANSMISSION_DISCONNECT -> {
+						log(LogTag.OSM, "Disconnected.")
+						return isRunning
 					}
-			} catch (IOException e) {
-				if(status) {
-					if(e.getMessage().contains("Socket is not connected")) return true;
-					if(e.getMessage().contains("Connection reset by peer")) {
-						log(Actions.Tag.OSM, "Connection reset by peer, reconnecting...", WARNING);
-						return true;
-					}
-					log(Actions.Tag.OSM, "Unexpected exception, disconnection detection disabled.", e);
+					else -> log(LogTag.OSM, "Received invalid flag.", WARNING)
 				}
-			} catch(NullPointerException e_handled) {
-				return status;
-			}
-			return false;
-		}
-		
-		private void writeData() {
-			writing = true;
-			while(buffer.size() > 0) {
-				if(connected) {
-					try {
-						bos.write(buffer.get(0));
-						bos.flush();
-						
-						bos.write(buffer.get(0));
-						bos.flush();
-						
-						bos.write(buffer.get(0));
-						bos.flush();
-						
-						bos.write(buffer.get(0));
-						bos.flush();
-					} catch (IOException e) {
-						log(Actions.Tag.OSM, "Could not write data.", WARNING);
-						failedWriteCycles++;
-						if(failedWriteCycles <= FAILED_WRITE_CYCLE_THRESHOLD) continue;
-						log(Actions.Tag.OSM, "Failed write cycle threshold has been reached, removing data...", e);
+			} catch (e: IOException) {
+				if (isRunning) {
+					if (e.message!!.contains("Socket is not connected")) return true
+					if (e.message!!.contains("Connection reset by peer")) {
+						log(LogTag.OSM, "Connection reset by peer, reconnecting...", WARNING)
+						return true
 					}
-					buffer.remove(0);
-					failedWriteCycles = 0;
+					log(LogTag.OSM, "Unexpected exception, disconnection detection disabled.", e)
+				}
+			} catch (e_handled: NullPointerException) {
+				return isRunning
+			}
+			return false
+		}
+
+		private fun writeData() {
+			writing = true
+			while (buffer.size > 0) {
+				if (connected) {
+					try {
+						bos!!.write(buffer[0])
+						bos!!.flush()
+						bos!!.write(buffer[0])
+						bos!!.flush()
+						bos!!.write(buffer[0])
+						bos!!.flush()
+						bos!!.write(buffer[0])
+						bos!!.flush()
+					} catch (e: IOException) {
+						log(LogTag.OSM, "Could not write data.", WARNING)
+						failedWriteCycles++
+						if (failedWriteCycles <= FAILED_WRITE_CYCLE_THRESHOLD)
+							continue
+						log(LogTag.OSM, "Failed write cycle threshold has been reached, removing data...", e)
+					}
+					buffer.removeAt(0)
+					failedWriteCycles = 0
 				} else {
 					synchronized(lock_connection) {
-						lock_connection.notify();
+						lock_connection.notify()
 						try {
-							lock_connection.wait();
-						} catch (InterruptedException e) {
-							log(Actions.Tag.OSM, "Could not wait for socket to connect.", e);
+							lock_connection.wait()
+						} catch (e: InterruptedException) {
+							log(LogTag.OSM, "Could not wait for socket to connect.", e)
 						}
 					}
 				}
 			}
-			writing = false;
+			writing = false
 		}
-		
-		public void addData(byte[] data) {
-			data[9] = 0; //TODO why doesn't this reset automatically?
-			for(short s = 4; s < 9; s++)
-				data[9] += data[s];
-			buffer.add(data);
-			if(debug)
-				for(short s = 0; s < data.length; s++)
-					log(Actions.Tag.OSM, "O | " + s + ": " + data[s]);
-			if(!writing)
-				writeData();
+
+		fun addData(data: ByteArray) {
+			data[9] = 0 //TODO why doesn't this reset automatically?
+			for(s in 4 until 9)
+				data[9] = (data[9] + data[s]).toByte()
+			buffer.add(data)
+			if (debugMode)
+				for (s in data.indices)
+					log(LogTag.OSM, "O | " + s + ": " + data[s])
+			if (!writing)
+				writeData()
 		}
-		
-		public void close() {
-			if(localSocket != null) {
-				log(Actions.Tag.OSM, "Closing local socket...");
+
+		fun close() {
+			if (localSocket != null) {
+				log(LogTag.OSM, "Closing local socket...")
 				try {
-					localSocket.close();
-				} catch (IOException e) {
-					if(debug) e.printStackTrace();
+					localSocket!!.close()
+				} catch (e: IOException) {
+					if (debugMode)
+						e.printStackTrace()
 				}
 			}
-			interrupt();
+			interrupt()
 		}
 	}
 }

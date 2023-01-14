@@ -8,15 +8,13 @@ class Light(private val id: ByteArray) {
 		data[6] = action.binaryCode[0]
 		data[7] = action.binaryCode[1]
 		data[8] = action.binaryCode[2]
-		Main.osm!!.addData(data)
+		Main.osm.addData(data)
 	}
 
 	fun sendAction(action: Action, value: Byte) {
 		if (value < action.minimumValue || value > action.maximumValue) {
-			Main.log(
-				LogTag.LIGHT,
-				"Value for action '" + action + " is out of range (" + action.minimumValue + " - " + action.maximumValue + "): " + value
-			)
+			Main.log(LogTag.LIGHT,
+				"Value for action '" + action + " is out of range (" + action.minimumValue + " - " + action.maximumValue + "): " + value)
 			return
 		}
 		val data = Main.DATA_OUTPUT
@@ -26,6 +24,6 @@ class Light(private val id: ByteArray) {
 		data[6] = action.binaryCode[0]
 		data[7] = action.binaryCode[1]
 		data[8] = value
-		Main.osm!!.addData(data)
+		Main.osm.addData(data)
 	}
 }

@@ -1,4 +1,10 @@
-class Light(private val id: ByteArray) {
+class Light(private val name: String) {
+
+	companion object {
+		val DATA_OUTPUT = byteArrayOf(85, 0, 0, 0, 1, 0, 0, 0, 0, 0, -86, -86)
+	}
+
+	private val id = name.substring(9, 12).toByteArray()
 
 	fun use(dayLightCycle: DayLightCycle) {
 		val transition = dayLightCycle.getActiveTransition()
@@ -6,7 +12,7 @@ class Light(private val id: ByteArray) {
 	}
 
 	fun sendAction(action: Action) {
-		val data = Main.DATA_OUTPUT
+		val data = DATA_OUTPUT
 		data[1] = id[0]
 		data[2] = id[1]
 		data[3] = id[2]
@@ -22,7 +28,7 @@ class Light(private val id: ByteArray) {
 				"Value for action '" + action + " is out of range (" + action.minimumValue + " - " + action.maximumValue + "): " + value)
 			return
 		}
-		val data = Main.DATA_OUTPUT
+		val data = DATA_OUTPUT
 		data[1] = id[0]
 		data[2] = id[1]
 		data[3] = id[2]

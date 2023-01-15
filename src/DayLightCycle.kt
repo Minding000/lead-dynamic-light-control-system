@@ -20,7 +20,7 @@ class DayLightCycle {
 	fun getActiveTransition(): Transition {
 		if(targetPoints.size < 2)
 			throw Exception("Day light cycles need at least two target points, but only ${targetPoints.size} exist.")
-		val currentLocalTime = LocalDateTime.now(Main.timezone?.toZoneId())
+		val currentLocalTime = LocalDateTime.now(Main.timezoneId)
 		val currentTime = TargetPoint.Time(currentLocalTime.hour, currentLocalTime.minute, currentLocalTime.second)
 		var transition: Transition? = null
 		for(targetPointIndex in targetPoints.indices) {
@@ -34,7 +34,7 @@ class DayLightCycle {
 		if(transition == null)
 			transition = Transition(targetPoints.first(), targetPoints[1])
 		Logger.log(LogTag.LIGHT,
-			"Active transition at ${currentTime.hour}:${currentTime.minute} is from '${transition.startPoint}' to '${transition.endPoint}'.")
+			"Active transition at $currentTime is from '${transition.startPoint}' to '${transition.endPoint}'.")
 		return transition
 	}
 
@@ -47,29 +47,28 @@ class DayLightCycle {
 
 		fun applyTo(light: Light) {
 			Logger.log(LogTag.LIGHT, "Applying transition.")
-			light.sendAction(if(startPoint.status == TargetPoint.Status.ON) Action.TURN_ON else Action.TURN_OFF)
 			val timer = Timer()
-			var localEndPointTime = endPoint.time.toLocalDateTime(Main.timezone?.toZoneId())
+			var localEndPointTime = endPoint.time.toLocalDateTime(Main.timezoneId)
 			run {
-				val currentLocalTime = LocalDateTime.now(Main.timezone?.toZoneId())
+				val currentLocalTime = LocalDateTime.now(Main.timezoneId)
 				val currentTime = TargetPoint.Time(currentLocalTime)
 				if (endPoint.time < currentTime)
 					localEndPointTime = localEndPointTime.plusDays(1)
 			}
-			val endPointMillisecondsSinceEpoch = localEndPointTime.atZone(Main.timezone?.toZoneId()).toEpochSecond() * MILLISECONDS_PER_SECOND
+			val endPointMillisecondsSinceEpoch = localEndPointTime.atZone(Main.timezoneId).toEpochSecond() * MILLISECONDS_PER_SECOND
 			val millisecondsUntilEndPoint = endPointMillisecondsSinceEpoch - System.currentTimeMillis()
 			var intervalTask: TimerTask? = null
 			if(startPoint.status == TargetPoint.Status.ON) {
 				val millisecondsBetweenSteps = timeDifference.toDurationInSeconds() * MILLISECONDS_PER_SECOND / STEP_COUNT
 				Logger.log(LogTag.LIGHT, "Stepping brightness by $brightnessChangePerStep and warmth by $warmthChangePerStep every ${millisecondsBetweenSteps}ms for ${millisecondsUntilEndPoint}ms")
 				intervalTask = timer.scheduleAtFixedRate(0, millisecondsBetweenSteps) {
-					val currentLocalTime = LocalDateTime.now(Main.timezone?.toZoneId())
+					val currentLocalTime = LocalDateTime.now(Main.timezoneId)
 					val currentTime = TargetPoint.Time(currentLocalTime)
 					val elapsedTime = currentTime - startPoint.time
 					val elapsedStepCount = STEP_COUNT * (elapsedTime.toDurationInSeconds() / timeDifference.toDurationInSeconds().toFloat())
 					val currentBrightness = (startPoint.brightness + brightnessChangePerStep * elapsedStepCount).toInt().toByte()
 					val currentWarmth = (startPoint.warmth + warmthChangePerStep * elapsedStepCount).toInt().toByte()
-					Logger.log(LogTag.LIGHT, "Sending step #$elapsedStepCount (brightness: $currentBrightness, warmth: $currentWarmth)")
+					Logger.log(LogTag.LIGHT, "Sending step #${String.format("%.1f", elapsedStepCount)} (brightness: $currentBrightness, warmth: $currentWarmth)")
 					light.sendAction(Action.SET_BRIGHTNESS, currentBrightness)
 					light.sendAction(Action.SET_WARMTH, currentWarmth)
 				}
@@ -127,6 +126,17 @@ class DayLightCycle {
 
 			fun toLocalDateTime(zoneId: ZoneId?): LocalDateTime = LocalDateTime.now(zoneId).withHour(hour).withMinute(minute)
 				.withSecond(second)
+
+			override fun toString(): String {
+				var stringRepresentation = "$hour:"
+				if(minute < 10)
+					stringRepresentation += "0"
+				stringRepresentation += "$minute:"
+				if(second < 10)
+					stringRepresentation += "0"
+				stringRepresentation += second
+				return stringRepresentation
+			}
 		}
 
 		enum class Status {

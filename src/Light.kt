@@ -1,5 +1,10 @@
 class Light(private val id: ByteArray) {
 
+	fun use(dayLightCycle: DayLightCycle) {
+		val transition = dayLightCycle.getActiveTransition()
+		transition.applyTo(this)
+	}
+
 	fun sendAction(action: Action) {
 		val data = Main.DATA_OUTPUT
 		data[1] = id[0]
@@ -8,12 +13,12 @@ class Light(private val id: ByteArray) {
 		data[6] = action.binaryCode[0]
 		data[7] = action.binaryCode[1]
 		data[8] = action.binaryCode[2]
-		Main.osm.addData(data)
+		OutputStreamManager.addData(data)
 	}
 
 	fun sendAction(action: Action, value: Byte) {
 		if (value < action.minimumValue || value > action.maximumValue) {
-			Main.log(LogTag.LIGHT,
+			Logger.log(LogTag.LIGHT,
 				"Value for action '" + action + " is out of range (" + action.minimumValue + " - " + action.maximumValue + "): " + value)
 			return
 		}
@@ -24,6 +29,6 @@ class Light(private val id: ByteArray) {
 		data[6] = action.binaryCode[0]
 		data[7] = action.binaryCode[1]
 		data[8] = value
-		Main.osm.addData(data)
+		OutputStreamManager.addData(data)
 	}
 }

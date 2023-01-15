@@ -19,34 +19,33 @@ class DayLightCycle {
 
 	fun getActiveTransition(): Transition {
 		if(targetPoints.size < 2)
-			throw Exception("Day light cycles need at least two target points, but only ${targetPoints.size} exist.")
+			throw Exception("Day light cycles need at least two target points (${targetPoints.size} present).")
 		val currentLocalTime = LocalDateTime.now(Main.timezoneId)
-		val currentTime = TargetPoint.Time(currentLocalTime.hour, currentLocalTime.minute, currentLocalTime.second)
+		val currentTime = TargetPoint.Time(currentLocalTime)
 		var transition: Transition? = null
 		for(targetPointIndex in targetPoints.indices) {
 			val currentTargetPoint = targetPoints[targetPointIndex]
 			if(currentTargetPoint.time > currentTime) {
-				val previousTargetPoint = targetPoints.getOrNull(targetPointIndex - 1) ?: targetPoints.last()
+				val previousTargetPoint = targetPoints[targetPointIndex - 1]
 				transition = Transition(previousTargetPoint, currentTargetPoint)
 				break
 			}
 		}
 		if(transition == null)
-			transition = Transition(targetPoints.first(), targetPoints[1])
-		Logger.log(LogTag.LIGHT,
-			"Active transition at $currentTime is from '${transition.startPoint}' to '${transition.endPoint}'.")
+			transition = Transition(targetPoints.last(), targetPoints.first())
 		return transition
 	}
 
-	inner class Transition(val startPoint: TargetPoint, val endPoint: TargetPoint) {
-		val timeDifference = endPoint.time - startPoint.time
-		val brightnessDifference = endPoint.brightness - startPoint.brightness
-		val warmthDifference = endPoint.warmth - startPoint.warmth
-		val brightnessChangePerStep = brightnessDifference.toFloat() / STEP_COUNT
-		val warmthChangePerStep = warmthDifference.toFloat() / STEP_COUNT
+	inner class Transition(private val startPoint: TargetPoint, private val endPoint: TargetPoint) {
+		private val timeDifference = endPoint.time - startPoint.time
+		private val brightnessDifference = endPoint.brightness - startPoint.brightness
+		private val warmthDifference = endPoint.warmth - startPoint.warmth
+		private val brightnessChangePerStep = brightnessDifference.toFloat() / STEP_COUNT
+		private val warmthChangePerStep = warmthDifference.toFloat() / STEP_COUNT
 
 		fun applyTo(light: Light) {
-			Logger.log(LogTag.LIGHT, "Applying transition.")
+			Logger.log(LogTag.LIGHT, "Transitioning from '$startPoint'.")
+			Logger.log(LogTag.LIGHT, "Transitioning to '$endPoint'.")
 			val timer = Timer()
 			var localEndPointTime = endPoint.time.toLocalDateTime(Main.timezoneId)
 			run {
@@ -60,7 +59,8 @@ class DayLightCycle {
 			var intervalTask: TimerTask? = null
 			if(startPoint.status == TargetPoint.Status.ON) {
 				val millisecondsBetweenSteps = timeDifference.toDurationInSeconds() * MILLISECONDS_PER_SECOND / STEP_COUNT
-				Logger.log(LogTag.LIGHT, "Stepping brightness by $brightnessChangePerStep and warmth by $warmthChangePerStep every ${millisecondsBetweenSteps}ms for ${millisecondsUntilEndPoint}ms")
+				Logger.log(LogTag.LIGHT, "Changing brightness by $brightnessChangePerStep and warmth by $warmthChangePerStep" +
+					" every ${millisecondsBetweenSteps}ms for ${millisecondsUntilEndPoint}ms")
 				intervalTask = timer.scheduleAtFixedRate(0, millisecondsBetweenSteps) {
 					val currentLocalTime = LocalDateTime.now(Main.timezoneId)
 					val currentTime = TargetPoint.Time(currentLocalTime)
@@ -68,7 +68,8 @@ class DayLightCycle {
 					val elapsedStepCount = STEP_COUNT * (elapsedTime.toDurationInSeconds() / timeDifference.toDurationInSeconds().toFloat())
 					val currentBrightness = (startPoint.brightness + brightnessChangePerStep * elapsedStepCount).toInt().toByte()
 					val currentWarmth = (startPoint.warmth + warmthChangePerStep * elapsedStepCount).toInt().toByte()
-					Logger.log(LogTag.LIGHT, "Sending step #${String.format("%.1f", elapsedStepCount)} (brightness: $currentBrightness, warmth: $currentWarmth)")
+					Logger.log(LogTag.LIGHT, "Sending step #${String.format("%.1f", elapsedStepCount)}" +
+						" (brightness: $currentBrightness, warmth: $currentWarmth)")
 					light.sendAction(Action.SET_BRIGHTNESS, currentBrightness)
 					light.sendAction(Action.SET_WARMTH, currentWarmth)
 				}
@@ -124,7 +125,7 @@ class DayLightCycle {
 				return (hour * MINUTES_PER_HOUR + minute) * SECONDS_PER_MINUTE + second
 			}
 
-			fun toLocalDateTime(zoneId: ZoneId?): LocalDateTime = LocalDateTime.now(zoneId).withHour(hour).withMinute(minute)
+			fun toLocalDateTime(zoneId: ZoneId): LocalDateTime = LocalDateTime.now(zoneId).withHour(hour).withMinute(minute)
 				.withSecond(second)
 
 			override fun toString(): String {

@@ -2,8 +2,8 @@ object LogTag {
 	const val INIT = "INIT"
 	const val SHUTDOWN = "SHDN"
 	const val TERMINATE = "TERM"
-	const val OSM = "OSM"
+	const val COMMAND = "COMM"
 	const val CONSOLE = "CONS"
-	const val UDP = "UDP"
+	const val DISCOVERY = "DSCV"
 	const val LIGHT = "LGHT"
 }

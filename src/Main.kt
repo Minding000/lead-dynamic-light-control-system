@@ -12,7 +12,7 @@ object Main {
 	var debugMode = true
 	var isRunning = false
 	var isDryRun = false
-	var sourceAddress: InetAddress? = null
+	lateinit var sourceAddress: InetAddress
 	var timezone = TimeZone.getDefault()
 	var timezoneId = timezone.toZoneId()
 	var lights: MutableList<Light> = LinkedList()
@@ -36,8 +36,8 @@ object Main {
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(22, 0),
 			DayLightCycle.TargetPoint.Status.OFF, 0, 32))
-		val light = lights.first()
-		light.use(dayLightCycle)
+		for(light in lights)
+			light.use(dayLightCycle)
 		ConsoleInterface.processInput()
 	}
 

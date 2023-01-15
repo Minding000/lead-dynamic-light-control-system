@@ -29,12 +29,12 @@ object OutputStreamManager: Thread() {
 
 	@Synchronized
 	override fun start() {
-		targetAddress = InetSocketAddress(getTargetAddress(), COMMAND_PORT)
+		targetAddress = getTargetAddress()
 		super.start()
 	}
 
 	override fun run() {
-		Logger.log(LogTag.OSM, "Connecting to '${targetAddress.hostString}'...")
+		Logger.log(LogTag.COMMAND, "Connecting to '${targetAddress.hostString}'...")
 		while (shouldConnect()) {
 			isConnected = false
 			synchronized(connectionLock) {
@@ -63,31 +63,33 @@ object OutputStreamManager: Thread() {
 				} catch (_: InterruptedException) {}
 				continue
 			}
-			Logger.log(LogTag.OSM, "Connected.")
+			Logger.log(LogTag.COMMAND, "Connected.")
 			isConnected = true
 			synchronized(connectionLock) { connectionLock.notify() }
 		}
-		Main.terminate(LogTag.OSM, "Output stream manager stopped.")
+		Main.terminate(LogTag.COMMAND, "Output stream manager stopped.")
 	}
 
 	private fun shouldConnect(): Boolean {
 		val inputStream = commandInputStream ?: return Main.isRunning
 		try {
-			while (true) when (inputStream.read()) {
-				CONNECTION_LOST -> {
-					Logger.log(LogTag.OSM, "Disconnected.")
-					return Main.isRunning
+			while (true) {
+				when (inputStream.read()) {
+					CONNECTION_LOST -> {
+						Logger.log(LogTag.COMMAND, "Disconnected.")
+						return Main.isRunning
+					}
+					else -> Logger.log(LogTag.COMMAND, "Unexpectedly received data.", Logger.WARNING)
 				}
-				else -> Logger.log(LogTag.OSM, "Unexpectedly received data.", Logger.WARNING)
 			}
 		} catch (e: IOException) {
 			if (Main.isRunning) {
 				if (e.message!!.contains("Socket is not connected")) return true
 				if (e.message!!.contains("Connection reset by peer")) {
-					Logger.log(LogTag.OSM, "Connection reset by peer, reconnecting...", Logger.WARNING)
+					Logger.log(LogTag.COMMAND, "Connection reset by peer, reconnecting...", Logger.WARNING)
 					return true
 				}
-				Logger.log(LogTag.OSM, "Unexpected exception, disconnection detection disabled.", e)
+				Logger.log(LogTag.COMMAND, "Unexpected exception, disconnection detection disabled.", e)
 			}
 			return false
 		}
@@ -107,15 +109,14 @@ object OutputStreamManager: Thread() {
 					}
 				}
 				try {
-					for(i in 0 until 4)
-						commandOutputStream!!.write(commandQueue[0])
+					commandOutputStream!!.write(commandQueue.first())
 					commandOutputStream!!.flush()
 				} catch (e: IOException) {
-					Logger.log(LogTag.OSM, "Failed to send data.", Logger.WARNING)
+					Logger.log(LogTag.COMMAND, "Failed to send data.", Logger.WARNING)
 					failedSendCycleCount++
 					if (failedSendCycleCount <= FAILED_SEND_CYCLE_THRESHOLD)
 						continue
-					Logger.log(LogTag.OSM, "Failed send cycle threshold has been reached, clearing data...", e)
+					Logger.log(LogTag.COMMAND, "Failed send cycle threshold has been reached, dropping command...", e)
 				}
 				commandQueue.removeAt(0)
 				failedSendCycleCount = 0
@@ -133,50 +134,50 @@ object OutputStreamManager: Thread() {
 	}
 
 	fun close() {
-		Logger.log(LogTag.OSM, "Closing local socket...")
+		Logger.log(LogTag.COMMAND, "Closing local socket...")
 		try {
 			commandSocket?.close()
 		} catch (_: IOException) {}
 		interrupt()
 	}
 
-	private fun getTargetAddress(): String? {
-		Logger.log(LogTag.UDP, "Creating datagram socket...")
+	private fun getTargetAddress(): InetSocketAddress {
+		Logger.log(LogTag.DISCOVERY, "Creating discovery socket...")
 		try {
 			discoverySocket = DatagramSocket(DISCOVERY_PORT)
 			discoverySocket.soTimeout = DISCOVERY_TIMEOUT_IN_MILLISECONDS
 		} catch (e: SocketException) {
-			Main.terminate(LogTag.UDP, "Failed to create datagram socket.", e)
+			Main.terminate(LogTag.DISCOVERY, "Failed to create discovery socket.", e)
 		}
-		Logger.log(LogTag.UDP, "Sending scan request...")
+		Logger.log(LogTag.DISCOVERY, "Sending discovery request...")
 		try {
 			discoverySocket.send(DatagramPacket(DISCOVERY_COMMAND, DISCOVERY_COMMAND.size, Main.sourceAddress, DISCOVERY_PORT))
 		} catch (e: IOException) {
-			Main.terminate(LogTag.UDP, "Failed to send scan request.", e)
+			Main.terminate(LogTag.DISCOVERY, "Failed to send discovery request.", e)
 		}
-		Logger.log(LogTag.UDP, "Receiving data...")
+		Logger.log(LogTag.DISCOVERY, "Receiving discovery responses...")
 		val datagramPacket = DatagramPacket(ByteArray(DISCOVERY_BUFFER_SIZE_IN_BYTES), DISCOVERY_BUFFER_SIZE_IN_BYTES)
 		var rawTargetAddress: String? = null
 		try {
 			while (true) {
 				discoverySocket.receive(datagramPacket)
-				val message = String(datagramPacket.data, datagramPacket.offset, datagramPacket.length)
-				Logger.log(LogTag.UDP, "Received '$message'.")
-				val data = message.split(",")
+				val response = String(datagramPacket.data, datagramPacket.offset, datagramPacket.length)
+				Logger.log(LogTag.DISCOVERY, "Received '$response'.")
+				val data = response.split(",")
 				if (data.size == 3) {
 					rawTargetAddress = data[0]
 					val name = data[1]
 					Main.lights.add(Light(name))
-					Logger.log(LogTag.UDP, "Light '$name' added.")
+					Logger.log(LogTag.DISCOVERY, "Light '$name' added.")
 					break
 				}
 			}
 		} catch (e: SocketTimeoutException) {
-			Logger.log(LogTag.UDP, "Socket timed out.")
+			Main.terminate(LogTag.DISCOVERY, "Discovery timeout.", e)
 		} catch (e: IOException) {
-			Main.terminate(LogTag.UDP, "Failed to receive data.", e)
+			Main.terminate(LogTag.DISCOVERY, "Failed to discovery responses.", e)
 		}
-		if (rawTargetAddress == null) Main.terminate(LogTag.UDP, "Failed to determine target address.")
-		return rawTargetAddress
+		if (rawTargetAddress == null) Main.terminate(LogTag.DISCOVERY, "Failed to determine target address.")
+		return InetSocketAddress(rawTargetAddress, COMMAND_PORT)
 	}
 }

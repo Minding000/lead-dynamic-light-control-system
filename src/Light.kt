@@ -12,7 +12,7 @@ class Light(private val name: String) {
 	}
 
 	fun sendAction(action: Action) {
-		val data = DATA_OUTPUT
+		val data = DATA_OUTPUT.clone()
 		data[1] = id[0]
 		data[2] = id[1]
 		data[3] = id[2]
@@ -25,10 +25,10 @@ class Light(private val name: String) {
 	fun sendAction(action: Action, value: Byte) {
 		if (value < action.minimumValue || value > action.maximumValue) {
 			Logger.log(LogTag.LIGHT,
-				"Value for action '" + action + " is out of range (" + action.minimumValue + " - " + action.maximumValue + "): " + value)
+				"Value for action '$action' is out of range (${action.minimumValue} - ${action.maximumValue}): $value")
 			return
 		}
-		val data = DATA_OUTPUT
+		val data = DATA_OUTPUT.clone()
 		data[1] = id[0]
 		data[2] = id[1]
 		data[3] = id[2]

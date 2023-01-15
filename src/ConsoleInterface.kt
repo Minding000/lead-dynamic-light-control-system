@@ -10,12 +10,12 @@ object ConsoleInterface {
 				"turn" -> {
 					when(cmd.lastOrNull()?.lowercase()) {
 						"on" -> {
-							val light = Main.lights.first()
-							light.sendAction(Action.TURN_ON)
+							for(light in Main.lights)
+								light.sendAction(Action.TURN_ON)
 						}
 						"off" -> {
-							val light = Main.lights.first()
-							light.sendAction(Action.TURN_OFF)
+							for(light in Main.lights)
+								light.sendAction(Action.TURN_OFF)
 						}
 						else -> Logger.log(LogTag.CONSOLE, "Expected 'turn on' or 'turn off'.")
 					}
@@ -24,29 +24,26 @@ object ConsoleInterface {
 					when(cmd.getOrNull(1)) {
 						"brightness" -> {
 							val brightness = cmd[2].toByte()
-							val light = Main.lights.first()
-							light.sendAction(Action.SET_BRIGHTNESS, brightness)
+							for(light in Main.lights)
+								light.sendAction(Action.SET_BRIGHTNESS, brightness)
 						}
 						"warmth" -> {
 							val warmth = cmd[2].toByte()
-							val light = Main.lights.first()
-							light.sendAction(Action.SET_WARMTH, warmth)
+							for(light in Main.lights)
+								light.sendAction(Action.SET_WARMTH, warmth)
 						}
 						else -> Logger.log(LogTag.CONSOLE, "Expected 'set brightness <value>' or 'set warmth <value>'.")
 					}
 				}
 				"?", "help" -> {
 					Logger.log(LogTag.CONSOLE, "Available commands:")
-					Logger.log(LogTag.CONSOLE, ">>turn")
-					Logger.log(LogTag.CONSOLE, ">>set")
-					Logger.log(LogTag.CONSOLE, ">>shutdown")
-					Logger.log(LogTag.CONSOLE, ">>help")
+					Logger.log(LogTag.CONSOLE, "> turn on/off")
+					Logger.log(LogTag.CONSOLE, "> set brightness/warmth")
+					Logger.log(LogTag.CONSOLE, "> shutdown")
+					Logger.log(LogTag.CONSOLE, "> help")
 				}
-				"shutdown" -> {
-					Main.terminate()
-					Logger.log(LogTag.CONSOLE, "Invalid input, type '?' for help.")
-				}
-				else -> Logger.log(LogTag.CONSOLE, "Invalid input, type '?' for help.")
+				"shutdown" -> Main.terminate()
+				else -> Logger.log(LogTag.CONSOLE, "Invalid input, type 'help' for help.")
 			}
 		}
 	}

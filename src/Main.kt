@@ -1,6 +1,7 @@
 import java.net.*
 import java.time.LocalDateTime
 import java.util.*
+import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 //Note: IntelliJ artifacts:
@@ -69,9 +70,14 @@ object Main {
 		timezoneId = timezone.toZoneId()
 		if(!isDryRun) {
 			for(networkInterface in networkInterfaces) {
-				val light = NetworkScanner.discoverLight(networkInterface)
-				if(light != null) //TODO retry if failed
-					lights.add(light)
+				lights.add(NetworkScanner.discoverLight(networkInterface) ?: continue)
+//				thread {
+//					while(true) { //TODO retry if failed
+//						val light = NetworkScanner.discoverLight(networkInterface)
+//						if(light != null)
+//							lights.add(light)
+//					}
+//				}
 			}
 		}
 	}

@@ -1,8 +1,5 @@
 object LogTag {
-	const val INIT = "INIT"
-	const val SHUTDOWN = "SHDN"
-	const val TERMINATE = "TERM"
-	const val COMMAND = "COMM"
+	const val CONFIGURATION = "CONF"
 	const val CONSOLE = "CONS"
 	const val DISCOVERY = "DSCV"
 	const val LIGHT = "LGHT"

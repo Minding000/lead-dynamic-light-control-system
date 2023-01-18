@@ -26,7 +26,7 @@ class DayLightCycle {
 		for(targetPointIndex in targetPoints.indices) {
 			val currentTargetPoint = targetPoints[targetPointIndex]
 			if(currentTargetPoint.time > currentTime) {
-				val previousTargetPoint = targetPoints[targetPointIndex - 1]
+				val previousTargetPoint = targetPoints.getOrNull(targetPointIndex - 1) ?: targetPoints.last()
 				transition = Transition(previousTargetPoint, currentTargetPoint)
 				break
 			}
@@ -58,6 +58,7 @@ class DayLightCycle {
 			val millisecondsUntilEndPoint = endPointMillisecondsSinceEpoch - System.currentTimeMillis()
 			var intervalTask: TimerTask? = null
 			if(startPoint.status == TargetPoint.Status.ON) {
+				light.sendCommand(Command.TURN_ON)
 				val millisecondsBetweenSteps = timeDifference.toDurationInSeconds() * MILLISECONDS_PER_SECOND / STEP_COUNT
 				Logger.log(LogTag.LIGHT, "Changing brightness by $brightnessChangePerStep and warmth by $warmthChangePerStep" +
 					" every ${millisecondsBetweenSteps}ms for ${millisecondsUntilEndPoint}ms")
@@ -70,13 +71,14 @@ class DayLightCycle {
 					val currentWarmth = (startPoint.warmth + warmthChangePerStep * elapsedStepCount).toInt().toByte()
 					Logger.log(LogTag.LIGHT, "Sending step #${String.format("%.1f", elapsedStepCount)}" +
 						" (brightness: $currentBrightness, warmth: $currentWarmth)")
-					light.sendAction(Action.SET_BRIGHTNESS, currentBrightness)
-					light.sendAction(Action.SET_WARMTH, currentWarmth)
+					light.sendCommand(Command.SET_BRIGHTNESS, currentBrightness)
+					light.sendCommand(Command.SET_WARMTH, currentWarmth)
 				}
-				light.sendAction(Action.TURN_ON)
 			} else {
-				light.sendAction(Action.TURN_OFF)
-				Logger.log(LogTag.LIGHT, "Waiting for ${millisecondsUntilEndPoint}ms")
+				light.sendCommand(Command.SET_BRIGHTNESS, endPoint.brightness)
+				light.sendCommand(Command.SET_WARMTH, endPoint.warmth)
+				light.sendCommand(Command.TURN_OFF)
+				Logger.log(LogTag.LIGHT, "Light '${light.name}' turned off until ${endPoint.time} (for ${millisecondsUntilEndPoint}ms).")
 			}
 			timer.schedule(millisecondsUntilEndPoint) {
 				Logger.log(LogTag.LIGHT, "Cleaning up...")

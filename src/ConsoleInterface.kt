@@ -11,11 +11,11 @@ object ConsoleInterface {
 					when(cmd.lastOrNull()?.lowercase()) {
 						"on" -> {
 							for(light in Main.lights)
-								light.sendAction(Action.TURN_ON)
+								light.sendCommand(Command.TURN_ON)
 						}
 						"off" -> {
 							for(light in Main.lights)
-								light.sendAction(Action.TURN_OFF)
+								light.sendCommand(Command.TURN_OFF)
 						}
 						else -> Logger.log(LogTag.CONSOLE, "Expected 'turn on' or 'turn off'.")
 					}
@@ -25,12 +25,12 @@ object ConsoleInterface {
 						"brightness" -> {
 							val brightness = cmd[2].toByte()
 							for(light in Main.lights)
-								light.sendAction(Action.SET_BRIGHTNESS, brightness)
+								light.sendCommand(Command.SET_BRIGHTNESS, brightness)
 						}
 						"warmth" -> {
 							val warmth = cmd[2].toByte()
 							for(light in Main.lights)
-								light.sendAction(Action.SET_WARMTH, warmth)
+								light.sendCommand(Command.SET_WARMTH, warmth)
 						}
 						else -> Logger.log(LogTag.CONSOLE, "Expected 'set brightness <value>' or 'set warmth <value>'.")
 					}

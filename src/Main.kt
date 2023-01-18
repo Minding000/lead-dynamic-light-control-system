@@ -12,18 +12,18 @@ object Main {
 	var debugMode = true
 	var isRunning = false
 	var isDryRun = false
-	lateinit var sourceAddress: InetAddress
 	var timezone = TimeZone.getDefault()
 	var timezoneId = timezone.toZoneId()
 	var lights: MutableList<Light> = LinkedList()
 	val dayLightCycle = DayLightCycle()
+	val networkInterfaces = LinkedList<InetAddress>()
 
 	@JvmStatic
 	fun main(args: Array<String>) {
 		isDryRun = args.contains("--dry-run")
-		if(isDryRun)
-			lights.add(Light("0123456789ABCDEF"))
 		init()
+		if(isDryRun)
+			lights.add(Light("0123456789ABCDEF", networkInterfaces.first(), "10.10.100.254"))
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(10, 0),
 			DayLightCycle.TargetPoint.Status.ON, 0, 25))
@@ -64,19 +64,25 @@ object Main {
 		isRunning = true
 		if(!isDryRun)
 			Configuration.load()
-		sourceAddress = Configuration.getSourceAddress()
+		networkInterfaces.addAll(Configuration.getNetworkInterfaces())
 		timezone = Configuration.getTimeZone()
 		timezoneId = timezone.toZoneId()
-		if(!isDryRun)
-			OutputStreamManager.start()
+		if(!isDryRun) {
+			for(networkInterface in networkInterfaces) {
+				val light = NetworkScanner.discoverLight(networkInterface)
+				if(light != null) //TODO retry if failed
+					lights.add(light)
+			}
+		}
 	}
 
 	fun terminate() {
 		if (isRunning) {
+			Logger.log(LogTag.CONSOLE, "Exiting...")
 			ConsoleInterface.shutdown()
-			Logger.log(LogTag.TERMINATE, "Terminating server...")
-			shutdown()
-			Logger.log(LogTag.TERMINATE, "Exiting...")
+			isRunning = false
+			for(light in lights)
+				light.disconnect()
 			exitProcess(0)
 		}
 	}
@@ -89,13 +95,5 @@ object Main {
 	fun terminate(tag: String?, msg: String, e: Exception) {
 		if (debugMode) e.printStackTrace()
 		terminate(tag, msg)
-	}
-
-	fun shutdown() {
-		isRunning = false
-		Logger.log(LogTag.SHUTDOWN, "Stopping output stream manager...")
-		OutputStreamManager.close()
-		if (OutputStreamManager.isAlive)
-			OutputStreamManager.join()
 	}
 }

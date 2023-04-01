@@ -1,7 +1,6 @@
-import java.net.*
 import java.time.LocalDateTime
+import java.time.ZoneId
 import java.util.*
-import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
 //Note: IntelliJ artifacts:
@@ -13,18 +12,21 @@ object Main {
 	var debugMode = true
 	var isRunning = false
 	var isDryRun = false
-	var timezone = TimeZone.getDefault()
-	var timezoneId = timezone.toZoneId()
-	var lights: MutableList<Light> = LinkedList()
-	val dayLightCycle = DayLightCycle()
-	val networkInterfaces = LinkedList<InetAddress>()
+	private var timezone = TimeZone.getDefault()
+	var timezoneId: ZoneId = timezone.toZoneId()
+	var lights = LinkedList<Light>()
+	private val dayLightCycle = DayLightCycle()
 
 	@JvmStatic
 	fun main(args: Array<String>) {
 		isDryRun = args.contains("--dry-run")
 		init()
-		if(isDryRun)
-			lights.add(Light("0123456789ABCDEF", networkInterfaces.first(), "10.10.100.254"))
+		if(isDryRun) {
+			lights.add(Light("0123456789ABCDEF", "wlan1"))
+			addTestTargetPoint()
+		}
+		for(light in lights)
+			dayLightCycle.add(light)
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(10, 0),
 			DayLightCycle.TargetPoint.Status.ON, 0, 25))
@@ -37,9 +39,8 @@ object Main {
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(22, 0),
 			DayLightCycle.TargetPoint.Status.OFF, 0, 32))
-		for(light in lights)
-			light.use(dayLightCycle)
-		ConsoleInterface.processInput()
+		dayLightCycle.start()
+		ConsoleInterface.start()
 	}
 
 	private fun addTestTargetPoint() {
@@ -62,35 +63,32 @@ object Main {
 	}
 
 	private fun init() {
+		System.loadLibrary("interface_relay")
+		Runtime.getRuntime().addShutdownHook(Thread {
+			Logger.log(LogTag.CONSOLE, "Exiting...")
+			ConsoleInterface.interrupt()
+			isRunning = false
+		})
 		isRunning = true
 		if(!isDryRun)
 			Configuration.load()
-		networkInterfaces.addAll(Configuration.getNetworkInterfaces())
 		timezone = Configuration.getTimeZone()
 		timezoneId = timezone.toZoneId()
-		if(!isDryRun) {
-			for(networkInterface in networkInterfaces) {
-				lights.add(NetworkScanner.discoverLight(networkInterface) ?: continue)
-//				thread {
-//					while(true) { //TODO retry if failed
-//						val light = NetworkScanner.discoverLight(networkInterface)
-//						if(light != null)
-//							lights.add(light)
-//					}
-//				}
-			}
-		}
+		if(!isDryRun)
+			lights.addAll(Configuration.getLights())
 	}
 
-	fun terminate() {
-		if (isRunning) {
-			Logger.log(LogTag.CONSOLE, "Exiting...")
-			ConsoleInterface.shutdown()
-			isRunning = false
-			for(light in lights)
-				light.disconnect()
-			exitProcess(0)
-		}
+	fun sleep(durationInMilliseconds: Long) {
+		if(durationInMilliseconds <= 0)
+			return
+		try {
+			Thread.sleep(durationInMilliseconds)
+		} catch(_: InterruptedException) {}
+	}
+
+	fun terminate(tag: String?, msg: String, e: Exception) {
+		if (debugMode) e.printStackTrace()
+		terminate(tag, msg)
 	}
 
 	fun terminate(tag: String?, msg: String) {
@@ -98,8 +96,8 @@ object Main {
 		terminate()
 	}
 
-	fun terminate(tag: String?, msg: String, e: Exception) {
-		if (debugMode) e.printStackTrace()
-		terminate(tag, msg)
+	fun terminate() {
+		if (isRunning)
+			exitProcess(0)
 	}
 }

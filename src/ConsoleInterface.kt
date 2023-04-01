@@ -1,9 +1,9 @@
 import java.util.*
 
-object ConsoleInterface {
+object ConsoleInterface: Thread() {
 	private val scanner = Scanner(System.`in`)
 
-	fun processInput() {
+	override fun run() {
 		while (Main.isRunning) {
 			val cmd = scanner.nextLine().split("\\s+".toRegex()).toTypedArray()
 			when (cmd[0].lowercase(Locale.getDefault())) {
@@ -46,9 +46,6 @@ object ConsoleInterface {
 				else -> Logger.log(LogTag.CONSOLE, "Invalid input, type 'help' for help.")
 			}
 		}
-	}
-
-	fun shutdown() {
-		scanner.close()
+		scanner.reset()
 	}
 }

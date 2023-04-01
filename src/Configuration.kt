@@ -1,15 +1,14 @@
 import java.io.*
-import java.net.InetAddress
 import java.net.URISyntaxException
 import java.util.*
 
 object Configuration {
 	private const val FILE_NAME = "configuration"
+	private const val DELIMITER = ','
 	private const val TIMEZONE_KEY = "timezone"
-	private const val INTERFACES_KEY = "interfaces"
-	private const val INTERFACES_DELIMITER = ','
+	private const val LIGHTS_KEY = "lights"
 	private const val TIMEZONE_DEFAULT = "Europe/Berlin"
-	private const val INTERFACES_DEFAULT = "10.10.100.255"
+	private const val LIGHTS_DEFAULT = ""
 	private val properties = Properties()
 
 	fun load() {
@@ -38,8 +37,14 @@ object Configuration {
 		}
 	}
 
-	fun getNetworkInterfaces(): List<InetAddress> {
-		return properties.getProperty(INTERFACES_KEY, INTERFACES_DEFAULT).split(INTERFACES_DELIMITER).map(InetAddress::getByName)
+	fun getLights(): List<Light> {
+		val property = properties.getProperty(LIGHTS_KEY, LIGHTS_DEFAULT)
+		if(property.isBlank())
+			return listOf()
+		return property.split(DELIMITER).map { entry ->
+			val (lightName, interfaceName) = entry.trim().split("@")
+			Light(lightName, interfaceName)
+		}
 	}
 
 	fun getTimeZone(): TimeZone {

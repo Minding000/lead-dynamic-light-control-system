@@ -28,16 +28,19 @@ object Main {
 		for(light in lights)
 			dayLightCycle.add(light)
 		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(10, 0),
+			DayLightCycle.TargetPoint.Time(9, 30),
 			DayLightCycle.TargetPoint.Status.ON, 0, 25))
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(10, 30),
-			DayLightCycle.TargetPoint.Status.ON, 20, 10))
+			DayLightCycle.TargetPoint.Status.ON, 64, 10))
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(12, 0),
-			DayLightCycle.TargetPoint.Status.ON, 44, 0))
+			DayLightCycle.TargetPoint.Status.OFF, 0, 0))
 		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(22, 0),
+			DayLightCycle.TargetPoint.Time(20, 0),
+			DayLightCycle.TargetPoint.Status.ON, 40, 16))
+		dayLightCycle.add(DayLightCycle.TargetPoint(
+			DayLightCycle.TargetPoint.Time(0, 0),
 			DayLightCycle.TargetPoint.Status.OFF, 0, 32))
 		dayLightCycle.start()
 		ConsoleInterface.start()
@@ -63,7 +66,8 @@ object Main {
 	}
 
 	private fun init() {
-		System.loadLibrary("interface_relay")
+		if(!isDryRun)
+			System.loadLibrary("interface_relay")
 		Runtime.getRuntime().addShutdownHook(Thread {
 			Logger.log(LogTag.CONSOLE, "Exiting...")
 			ConsoleInterface.interrupt()

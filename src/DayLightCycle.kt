@@ -31,6 +31,7 @@ class DayLightCycle {
 	fun add(targetPoint: TargetPoint) {
 		if(activeTransition != null)
 			throw Exception("Cannot add target points after starting the day light cycle.")
+		targetPoint.validate()
 		targetPoints.add(targetPoint)
 	}
 
@@ -132,6 +133,16 @@ class DayLightCycle {
 
 	data class TargetPoint(val time: Time, val status: Status, val brightness: Byte, val warmth: Byte) {
 
+		fun validate() {
+			time.validate()
+			if(brightness < Command.SET_BRIGHTNESS.minimumValue || brightness > Command.SET_BRIGHTNESS.maximumValue)
+				throw IllegalArgumentException("The brightness has to be between ${Command.SET_BRIGHTNESS.minimumValue} and" +
+					" ${Command.SET_BRIGHTNESS.maximumValue} (inclusive). Provided: $brightness")
+			if(warmth < Command.SET_WARMTH.minimumValue || warmth > Command.SET_WARMTH.maximumValue)
+				throw IllegalArgumentException("The warmth has to be between ${Command.SET_WARMTH.minimumValue} and" +
+					" ${Command.SET_WARMTH.maximumValue} (inclusive). Provided: $warmth")
+		}
+
 		data class Time(val hour: Int, val minute: Int = 0, val second: Int = 0): Comparable<Time> {
 
 			companion object {
@@ -169,6 +180,15 @@ class DayLightCycle {
 
 			fun toLocalDateTime(zoneId: ZoneId): LocalDateTime = LocalDateTime.now(zoneId).withHour(hour).withMinute(minute)
 				.withSecond(second)
+
+			fun validate() {
+				if(hour < 0 || hour >= HOURS_PER_DAY)
+					throw IllegalArgumentException("The hour has to be between 0 and 23 (inclusive). Provided: $hour")
+				if(minute < 0 || minute >= MINUTES_PER_HOUR)
+					throw IllegalArgumentException("The minute has to be between 0 and 59 (inclusive). Provided: $minute")
+				if(second < 0 || second >= SECONDS_PER_MINUTE)
+					throw IllegalArgumentException("The second has to be between 0 and 59 (inclusive). Provided: $second")
+			}
 
 			override fun toString(): String {
 				var stringRepresentation = "$hour:"

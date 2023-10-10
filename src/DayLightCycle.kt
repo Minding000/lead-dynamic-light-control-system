@@ -1,9 +1,6 @@
-import java.lang.Exception
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.util.LinkedList
-import java.util.Timer
-import java.util.TimerTask
+import java.util.*
 import kotlin.concurrent.schedule
 import kotlin.concurrent.scheduleAtFixedRate
 
@@ -33,6 +30,11 @@ class DayLightCycle {
 			throw Exception("Cannot add target points after starting the day light cycle.")
 		targetPoint.validate()
 		targetPoints.add(targetPoint)
+	}
+
+	fun addAll(targetPoints: Collection<TargetPoint>) {
+		for(targetPoint in targetPoints)
+			add(targetPoint)
 	}
 
 	private fun determineActiveTransition(): Transition {
@@ -149,6 +151,14 @@ class DayLightCycle {
 				const val HOURS_PER_DAY = 24
 				const val MINUTES_PER_HOUR = 60
 				const val SECONDS_PER_MINUTE = 60
+
+				fun parse(input: String): Time {
+					val parts = input.split(":")
+					val hour = Integer.parseInt(parts[0])
+					val minute = if(parts.size >= 2) Integer.parseInt(parts[1]) else 0
+					val second = if(parts.size >= 3) Integer.parseInt(parts[2]) else 0
+					return Time(hour, minute, second)
+				}
 			}
 
 			constructor(localDateTime: LocalDateTime): this(localDateTime.hour, localDateTime.minute, localDateTime.second)

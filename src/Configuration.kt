@@ -1,14 +1,17 @@
 import java.io.*
 import java.net.URISyntaxException
 import java.util.*
+import java.util.regex.Pattern
 
 object Configuration {
 	private const val FILE_NAME = "configuration"
 	private const val DELIMITER = ','
 	private const val TIMEZONE_KEY = "timezone"
 	private const val LIGHTS_KEY = "lights"
+	private const val TARGET_POINTS_KEY = "targetPoints"
 	private const val TIMEZONE_DEFAULT = "Europe/Berlin"
 	private const val LIGHTS_DEFAULT = ""
+	private const val TARGET_POINTS_DEFAULT = ""
 	private val properties = Properties()
 
 	fun load() {
@@ -44,6 +47,21 @@ object Configuration {
 		return property.split(DELIMITER).map { entry ->
 			val (lightName, interfaceName) = entry.trim().split("@")
 			Light(lightName, interfaceName)
+		}
+	}
+
+	fun getTargetPoints(): List<DayLightCycle.TargetPoint> {
+		val property = properties.getProperty(TARGET_POINTS_KEY, TARGET_POINTS_DEFAULT)
+		if(property.isBlank())
+			return listOf()
+		return property.split(DELIMITER).map { entry ->
+			val (time, status, brightness, warmth) = entry.trim().split(Pattern.compile("\\s+"))
+			DayLightCycle.TargetPoint(
+				DayLightCycle.TargetPoint.Time.parse(time),
+				DayLightCycle.TargetPoint.Status.valueOf(status),
+				Integer.parseInt(brightness).toByte(),
+				Integer.parseInt(warmth).toByte()
+			)
 		}
 	}
 

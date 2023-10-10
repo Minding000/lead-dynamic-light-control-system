@@ -27,21 +27,7 @@ object Main {
 		}
 		for(light in lights)
 			dayLightCycle.add(light)
-		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(9, 30),
-			DayLightCycle.TargetPoint.Status.ON, 0, 25))
-		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(10, 30),
-			DayLightCycle.TargetPoint.Status.ON, 64, 10))
-		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(12, 0),
-			DayLightCycle.TargetPoint.Status.OFF, 0, 0))
-		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(20, 0),
-			DayLightCycle.TargetPoint.Status.ON, 40, 16))
-		dayLightCycle.add(DayLightCycle.TargetPoint(
-			DayLightCycle.TargetPoint.Time(0, 0),
-			DayLightCycle.TargetPoint.Status.OFF, 0, 32))
+		dayLightCycle.addAll(Configuration.getTargetPoints())
 		dayLightCycle.start()
 		ConsoleInterface.start()
 	}

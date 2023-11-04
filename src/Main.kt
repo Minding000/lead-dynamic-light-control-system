@@ -15,6 +15,7 @@ object Main {
 	private var timezone = TimeZone.getDefault()
 	var timezoneId: ZoneId = timezone.toZoneId()
 	var lights = LinkedList<Light>()
+	private var mode = Mode.AUTO
 	private val dayLightCycle = DayLightCycle()
 
 	@JvmStatic
@@ -23,7 +24,7 @@ object Main {
 		init()
 		if(isDryRun) {
 			lights.add(Light("0123456789ABCDEF", "wlan1"))
-			addTestTargetPoint()
+			addTestTargetPoints()
 		}
 		for(light in lights)
 			dayLightCycle.add(light)
@@ -32,7 +33,7 @@ object Main {
 		ConsoleInterface.start()
 	}
 
-	private fun addTestTargetPoint() {
+	private fun addTestTargetPoints() {
 		var time = LocalDateTime.now(timezone?.toZoneId()).plusMinutes(1)
 		dayLightCycle.add(DayLightCycle.TargetPoint(
 			DayLightCycle.TargetPoint.Time(time),
@@ -68,6 +69,19 @@ object Main {
 			lights.addAll(Configuration.getLights())
 	}
 
+	fun setMode(mode: Mode): Boolean {
+		if(mode == this.mode)
+			return false
+		this.mode = mode
+		if(mode == Mode.AUTO)
+			dayLightCycle.start()
+		else
+			dayLightCycle.stop()
+		return true
+	}
+
+	fun getMode(): Mode = mode
+
 	fun sleep(durationInMilliseconds: Long) {
 		if(durationInMilliseconds <= 0)
 			return
@@ -89,5 +103,14 @@ object Main {
 	fun terminate() {
 		if (isRunning)
 			exitProcess(0)
+	}
+
+	enum class Mode {
+		AUTO,
+		MANUAL;
+
+		override fun toString(): String {
+			return super.toString().lowercase()
+		}
 	}
 }

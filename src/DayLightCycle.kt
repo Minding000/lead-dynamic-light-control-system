@@ -20,6 +20,11 @@ class DayLightCycle {
 		activeTransition?.start(this::start)
 	}
 
+	fun stop() {
+		activeTransition?.stop()
+		activeTransition = null
+	}
+
 	fun add(light: Light) {
 		lights.add(light)
 		activeTransition?.updateLight(light)
@@ -74,11 +79,12 @@ class DayLightCycle {
 		private val warmthChangePerStep = warmthDifference.toFloat() / STEP_COUNT
 		private var currentBrightness: Byte = 0
 		private var currentWarmth: Byte = 0
+		private val timer = Timer()
+		private var intervalTask: TimerTask? = null
 
 		fun start(onFinish: () -> Unit) {
 			Logger.log(LogTag.LIGHT, "Transitioning from '$startPoint'.")
 			Logger.log(LogTag.LIGHT, "Transitioning to '$endPoint'.")
-			val timer = Timer()
 			var localEndPointTime = endPoint.time.toLocalDateTime(Main.timezoneId)
 			run {
 				val currentLocalTime = LocalDateTime.now(Main.timezoneId)
@@ -88,7 +94,6 @@ class DayLightCycle {
 			}
 			val endPointMillisecondsSinceEpoch = localEndPointTime.atZone(Main.timezoneId).toEpochSecond() * MILLISECONDS_PER_SECOND
 			val millisecondsUntilEndPoint = endPointMillisecondsSinceEpoch - System.currentTimeMillis()
-			var intervalTask: TimerTask? = null
 			if(startPoint.status == TargetPoint.Status.ON) {
 				sendCommand(Command.TURN_ON)
 				val millisecondsBetweenSteps = timeDifference.toDurationInSeconds() * MILLISECONDS_PER_SECOND / STEP_COUNT
@@ -113,9 +118,7 @@ class DayLightCycle {
 				Logger.log(LogTag.LIGHT, "Lights turned off until ${endPoint.time} (for ${millisecondsUntilEndPoint}ms).")
 			}
 			timer.schedule(millisecondsUntilEndPoint) {
-				Logger.log(LogTag.LIGHT, "Cleaning up...")
-				intervalTask?.cancel()
-				timer.cancel()
+				stop()
 				onFinish()
 			}
 		}
@@ -130,6 +133,12 @@ class DayLightCycle {
 				light.sendCommand(Command.SET_WARMTH, endPoint.warmth)
 				light.sendCommand(Command.TURN_OFF)
 			}
+		}
+
+		fun stop() {
+			Logger.log(LogTag.LIGHT, "Cleaning up...")
+			intervalTask?.cancel()
+			intervalTask = null
 		}
 	}
 

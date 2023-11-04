@@ -35,10 +35,31 @@ object ConsoleInterface: Thread() {
 						else -> Logger.log(LogTag.CONSOLE, "Expected 'set brightness <value>' or 'set warmth <value>'.")
 					}
 				}
+				"mode" -> {
+					when(cmd.getOrNull(1)) {
+						"auto" -> {
+							if(Main.setMode(Main.Mode.AUTO))
+								Logger.log(LogTag.CONSOLE, "Mode changed to 'auto'.")
+							else
+								Logger.log(LogTag.CONSOLE, "Mode is already set to 'auto'.")
+						}
+						"manual" -> {
+							if(Main.setMode(Main.Mode.MANUAL))
+								Logger.log(LogTag.CONSOLE, "Mode changed to 'manual'.")
+							else
+								Logger.log(LogTag.CONSOLE, "Mode is already set to 'manual'.")
+						}
+						null -> {
+							Logger.log(LogTag.CONSOLE, "Mode is set to '${Main.getMode()}'.")
+						}
+						else -> Logger.log(LogTag.CONSOLE, "Expected 'mode auto' or 'mode manual'.")
+					}
+				}
 				"?", "help" -> {
 					Logger.log(LogTag.CONSOLE, "Available commands:")
 					Logger.log(LogTag.CONSOLE, "> turn on/off")
-					Logger.log(LogTag.CONSOLE, "> set brightness/warmth")
+					Logger.log(LogTag.CONSOLE, "> set brightness/warmth <value>")
+					Logger.log(LogTag.CONSOLE, "> mode [auto/manual]")
 					Logger.log(LogTag.CONSOLE, "> shutdown")
 					Logger.log(LogTag.CONSOLE, "> help")
 				}

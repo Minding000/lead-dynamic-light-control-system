@@ -8,19 +8,36 @@ class DayLightCycle {
 	private var lights = LinkedList<Light>()
 	private val targetPoints = LinkedList<TargetPoint>()
 	private var activeTransition: Transition? = null
+	private var nextTransitionTask: TimerTask? = null
 
 	companion object {
 		const val STEP_COUNT = 64
 		const val MILLISECONDS_PER_SECOND = 1000L
 	}
 
-	fun start() {
+	fun initialize() {
 		targetPoints.sortBy { it.time }
+	}
+
+	fun start() {
+		if(Main.getMode() == Main.Mode.OVERRIDE)
+			Main.setMode(Main.Mode.AUTO)
 		activeTransition = determineActiveTransition()
 		activeTransition?.start(this::start)
 	}
 
+	fun queueNextTransition() {
+		activeTransition = determineActiveTransition()
+		activeTransition?.queueNextTransition()
+	}
+
 	fun stop() {
+		nextTransitionTask?.cancel()
+		nextTransitionTask = null
+		stopActiveTransition()
+	}
+
+	fun stopActiveTransition() {
 		activeTransition?.stop()
 		activeTransition = null
 	}
@@ -80,26 +97,18 @@ class DayLightCycle {
 		private var currentBrightness: Byte = 0
 		private var currentWarmth: Byte = 0
 		private val timer = Timer()
-		private var intervalTask: TimerTask? = null
+		private var nextStepTask: TimerTask? = null
 
 		fun start(onFinish: () -> Unit) {
 			Logger.log(LogTag.LIGHT, "Transitioning from '$startPoint'.")
 			Logger.log(LogTag.LIGHT, "Transitioning to '$endPoint'.")
-			var localEndPointTime = endPoint.time.toLocalDateTime(Main.timezoneId)
-			run {
-				val currentLocalTime = LocalDateTime.now(Main.timezoneId)
-				val currentTime = TargetPoint.Time(currentLocalTime)
-				if (endPoint.time < currentTime)
-					localEndPointTime = localEndPointTime.plusDays(1)
-			}
-			val endPointMillisecondsSinceEpoch = localEndPointTime.atZone(Main.timezoneId).toEpochSecond() * MILLISECONDS_PER_SECOND
-			val millisecondsUntilEndPoint = endPointMillisecondsSinceEpoch - System.currentTimeMillis()
+			val millisecondsUntilEndPoint = getMillisecondsUntilEnd()
 			if(startPoint.status == TargetPoint.Status.ON) {
 				sendCommand(Command.TURN_ON)
 				val millisecondsBetweenSteps = timeDifference.toDurationInSeconds() * MILLISECONDS_PER_SECOND / STEP_COUNT
 				Logger.log(LogTag.LIGHT, "Changing brightness by $brightnessChangePerStep and warmth by $warmthChangePerStep" +
 					" every ${millisecondsBetweenSteps}ms for ${millisecondsUntilEndPoint}ms")
-				intervalTask = timer.scheduleAtFixedRate(0, millisecondsBetweenSteps) {
+				nextStepTask = timer.scheduleAtFixedRate(0, millisecondsBetweenSteps) {
 					val currentLocalTime = LocalDateTime.now(Main.timezoneId)
 					val currentTime = TargetPoint.Time(currentLocalTime)
 					val elapsedTime = currentTime - startPoint.time
@@ -117,10 +126,32 @@ class DayLightCycle {
 				sendCommand(Command.TURN_OFF)
 				Logger.log(LogTag.LIGHT, "Lights turned off until ${endPoint.time} (for ${millisecondsUntilEndPoint}ms).")
 			}
-			timer.schedule(millisecondsUntilEndPoint) {
-				stop()
+			nextTransitionTask = timer.schedule(millisecondsUntilEndPoint) {
+				if(nextStepTask != null)
+					stop()
 				onFinish()
 			}
+		}
+
+		fun getMillisecondsUntilEnd(): Long {
+			var localEndPointTime = endPoint.time.toLocalDateTime(Main.timezoneId)
+			run {
+				val currentLocalTime = LocalDateTime.now(Main.timezoneId)
+				val currentTime = TargetPoint.Time(currentLocalTime)
+				if (endPoint.time < currentTime)
+					localEndPointTime = localEndPointTime.plusDays(1)
+			}
+			val endPointMillisecondsSinceEpoch = localEndPointTime.atZone(Main.timezoneId).toEpochSecond() * MILLISECONDS_PER_SECOND
+			return endPointMillisecondsSinceEpoch - System.currentTimeMillis()
+		}
+
+		fun queueNextTransition() {
+			val millisecondsUntilEndPoint = getMillisecondsUntilEnd()
+			nextTransitionTask = timer.schedule(millisecondsUntilEndPoint) {
+				start()
+			}
+			Logger.log(LogTag.LIGHT,
+				"The next automatic transition will start at ${endPoint.time} (in ${millisecondsUntilEndPoint}ms).")
 		}
 
 		fun updateLight(light: Light) {
@@ -137,8 +168,8 @@ class DayLightCycle {
 
 		fun stop() {
 			Logger.log(LogTag.LIGHT, "Cleaning up...")
-			intervalTask?.cancel()
-			intervalTask = null
+			nextStepTask?.cancel()
+			nextStepTask = null
 		}
 	}
 

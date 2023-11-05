@@ -29,6 +29,7 @@ object Main {
 		for(light in lights)
 			dayLightCycle.add(light)
 		dayLightCycle.addAll(Configuration.getTargetPoints())
+		dayLightCycle.initialize()
 		dayLightCycle.start()
 		ConsoleInterface.start()
 	}
@@ -72,11 +73,20 @@ object Main {
 	fun setMode(mode: Mode): Boolean {
 		if(mode == this.mode)
 			return false
+		val previousMode = this.mode
 		this.mode = mode
-		if(mode == Mode.AUTO)
+		if(mode == Mode.AUTO) {
+			if(previousMode == Mode.OVERRIDE)
+				dayLightCycle.stop()
 			dayLightCycle.start()
-		else
+		} else if(mode == Mode.OVERRIDE) {
+			if(previousMode == Mode.AUTO)
+				dayLightCycle.stopActiveTransition()
+			else
+				dayLightCycle.queueNextTransition()
+		} else if(mode == Mode.MANUAL) {
 			dayLightCycle.stop()
+		}
 		return true
 	}
 
@@ -107,6 +117,7 @@ object Main {
 
 	enum class Mode {
 		AUTO,
+		OVERRIDE,
 		MANUAL;
 
 		override fun toString(): String {

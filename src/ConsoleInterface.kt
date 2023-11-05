@@ -6,9 +6,9 @@ object ConsoleInterface: Thread() {
 	override fun run() {
 		while (Main.isRunning) {
 			val cmd = scanner.nextLine().split("\\s+".toRegex()).toTypedArray()
-			when (cmd[0].lowercase(Locale.getDefault())) {
+			when (cmd[0].lowercase(Locale.getDefault()).trim()) {
 				"turn" -> {
-					when(cmd.lastOrNull()?.lowercase()) {
+					when(cmd.lastOrNull()?.lowercase()?.trim()) {
 						"on" -> {
 							for(light in Main.lights)
 								light.sendCommand(Command.TURN_ON)
@@ -21,7 +21,7 @@ object ConsoleInterface: Thread() {
 					}
 				}
 				"set" -> {
-					when(cmd.getOrNull(1)) {
+					when(cmd.getOrNull(1)?.lowercase()?.trim()) {
 						"brightness" -> {
 							val brightness = cmd[2].toByte()
 							for(light in Main.lights)
@@ -36,14 +36,20 @@ object ConsoleInterface: Thread() {
 					}
 				}
 				"mode" -> {
-					when(cmd.getOrNull(1)) {
-						"auto" -> {
+					when(cmd.getOrNull(1)?.lowercase()?.trim()) {
+						Main.Mode.AUTO.toString() -> {
 							if(Main.setMode(Main.Mode.AUTO))
 								Logger.log(LogTag.CONSOLE, "Mode changed to 'auto'.")
 							else
 								Logger.log(LogTag.CONSOLE, "Mode is already set to 'auto'.")
 						}
-						"manual" -> {
+						Main.Mode.OVERRIDE.toString() -> {
+							if(Main.setMode(Main.Mode.OVERRIDE))
+								Logger.log(LogTag.CONSOLE, "Mode changed to 'override'.")
+							else
+								Logger.log(LogTag.CONSOLE, "Mode is already set to 'override'.")
+						}
+						Main.Mode.MANUAL.toString() -> {
 							if(Main.setMode(Main.Mode.MANUAL))
 								Logger.log(LogTag.CONSOLE, "Mode changed to 'manual'.")
 							else
@@ -59,7 +65,7 @@ object ConsoleInterface: Thread() {
 					Logger.log(LogTag.CONSOLE, "Available commands:")
 					Logger.log(LogTag.CONSOLE, "> turn on/off")
 					Logger.log(LogTag.CONSOLE, "> set brightness/warmth <value>")
-					Logger.log(LogTag.CONSOLE, "> mode [auto/manual]")
+					Logger.log(LogTag.CONSOLE, "> mode [${Main.Mode.values().joinToString("/")}]")
 					Logger.log(LogTag.CONSOLE, "> shutdown")
 					Logger.log(LogTag.CONSOLE, "> help")
 				}

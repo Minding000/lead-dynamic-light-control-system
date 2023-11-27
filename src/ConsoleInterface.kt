@@ -5,10 +5,16 @@ object ConsoleInterface: Thread() {
 
 	override fun run() {
 		while (Main.isRunning) {
-			val cmd = scanner.nextLine().split("\\s+".toRegex()).toTypedArray()
-			when (cmd[0].lowercase(Locale.getDefault()).trim()) {
+			val command: Array<String>
+			try {
+				command = scanner.nextLine().split("\\s+".toRegex()).toTypedArray()
+			} catch(exception: NoSuchElementException) {
+				Logger.log(LogTag.CONSOLE, "The input stream has been closed. Restart the application to re-enable CLI.")
+				break
+			}
+			when (command[0].lowercase(Locale.getDefault()).trim()) {
 				"turn" -> {
-					when(cmd.lastOrNull()?.lowercase()?.trim()) {
+					when(command.lastOrNull()?.lowercase()?.trim()) {
 						"on" -> {
 							for(light in Main.lights)
 								light.sendCommand(Command.TURN_ON)
@@ -21,14 +27,14 @@ object ConsoleInterface: Thread() {
 					}
 				}
 				"set" -> {
-					when(cmd.getOrNull(1)?.lowercase()?.trim()) {
+					when(command.getOrNull(1)?.lowercase()?.trim()) {
 						"brightness" -> {
-							val brightness = cmd[2].toByte()
+							val brightness = command[2].toByte()
 							for(light in Main.lights)
 								light.sendCommand(Command.SET_BRIGHTNESS, brightness)
 						}
 						"warmth" -> {
-							val warmth = cmd[2].toByte()
+							val warmth = command[2].toByte()
 							for(light in Main.lights)
 								light.sendCommand(Command.SET_WARMTH, warmth)
 						}
@@ -36,7 +42,7 @@ object ConsoleInterface: Thread() {
 					}
 				}
 				"mode" -> {
-					when(cmd.getOrNull(1)?.lowercase()?.trim()) {
+					when(command.getOrNull(1)?.lowercase()?.trim()) {
 						Main.Mode.AUTO.toString() -> {
 							if(Main.setMode(Main.Mode.AUTO))
 								Logger.log(LogTag.CONSOLE, "Mode changed to 'auto'.")
@@ -73,6 +79,6 @@ object ConsoleInterface: Thread() {
 				else -> Logger.log(LogTag.CONSOLE, "Invalid input, type 'help' for help.")
 			}
 		}
-		scanner.reset()
+		scanner.close()
 	}
 }

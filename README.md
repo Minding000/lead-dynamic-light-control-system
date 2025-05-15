@@ -1,4 +1,4 @@
-# Advanced light control system
+# Lead Dynamic Light Control System
 
 ## Installation
 
@@ -22,8 +22,10 @@
 - List network devices: `lshw -C network`
 - List interfaces: `ip link`
 - List addresses: `ip addr`
-
 - Ensure the lights are on
 - Ensure the WI-FI sticks are installed
 - Ensure the drivers are installed (especially after upgrading the kernel)
 - Ensure the network adapter names are correct in the netplan and configuration files
+
+## Further reading
+JNI guide: https://www3.ntu.edu.sg/home/ehchua/programming/java/javanativeinterface.html
